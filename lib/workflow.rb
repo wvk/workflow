@@ -298,6 +298,15 @@ module Workflow
     end
   end
 
+  module MongoidInstanceMethods
+    include ActiveRecordInstanceMethods
+    # implementation of abstract method: saves new workflow state to DB
+    def persist_workflow_state(new_value)
+      self.write_attribute(self.class.workflow_column, new_value.to_s)
+      self.save! :validate => false
+    end
+  end
+
   def self.included(klass)
     klass.send :include, WorkflowInstanceMethods
     klass.extend WorkflowClassMethods
@@ -309,6 +318,11 @@ module Workflow
     elsif Object.const_defined?(:Remodel)
       if klass < Remodel::Entity
         klass.send :include, RemodelInstanceMethods
+      end
+    elsif Object.const_defined?(:Mongoid)
+      if klass.include? Mongoid::Document
+        klass.send :include, MongoidInstanceMethods
+        klass.after_initialize :write_initial_state
       end
     end
   end
