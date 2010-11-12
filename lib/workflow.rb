@@ -154,22 +154,37 @@ module Workflow
 
     def process_event!(name, *args)
       event = current_state.events[name.to_sym]
-      raise NoTransitionAllowed.new(
-        "There is no event #{name.to_sym} defined for the #{current_state} state") \
-        if event.nil?
+      if event.nil?
+        raise NoTransitionAllowed.new \
+            "There is no event #{name.to_sym} defined for the #{current_state} state"
+      end
       @halted_because = nil
       @halted = false
       return_value = run_action(event.action, *args) || run_action_callback(event.name, *args)
       if @halted
         return false
       else
+        target_state = spec.states[event.transitions_to]
         check_transition(event)
-        run_on_transition(current_state, spec.states[event.transitions_to], name, *args)
-        transition_value = transition(
-          current_state, spec.states[event.transitions_to], name, *args
-        )
-        return_value.nil? ? transition_value : return_value
+        set_validation_triggers(current_state, target_state, name)
+        # TODO: shift this down by one line?!
+        # ... or possibly validate twice!
+        run_on_transition(current_state, target_state, name, *args) # if valid?
+        if valid?
+          transition(current_state, target_state, name, *args)
+        else
+          @halted_because = 'Validation for transition failed: %{errors}' % {:errors => self.errors.full_messages.join(', ')}
+          @halted = true
+          return false
+        end
+        return_value.nil? ? true : return_value
       end
+    end
+
+    def set_validation_triggers(current_state, target_state, event_name)
+      self.instance_variable_set "@validate_on_#{current_state}_exit", true
+      self.instance_variable_set "@validate_on_#{target_state}_entry", true
+      self.instance_variable_set "@validate_on_#{event_name}", true
     end
 
     def halt(reason = nil)
