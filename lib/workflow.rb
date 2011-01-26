@@ -95,7 +95,7 @@ module Workflow
   end
 
   module WorkflowClassMethods
-    attr_reader :workflow_spec
+    attr_reader :workflow_spec, :in_entry, :in_exit, :in_transition
 
     def workflow_column(column_name=nil)
       if column_name
@@ -124,8 +124,20 @@ module Workflow
               process_event!(event_name, *args)
             end
 
+            define_method "in_#{event_name}_exit?" do
+              return @in_exit.to_sym == state_name.to_sym
+            end
+
+            define_method "in_#{event_name}_entry?" do
+              return @in_entry.to_sym == state_name.to_sym
+            end
+
             define_method "can_#{event_name}?" do
               return self.current_state.events.include? event_name
+            end
+
+            define_method "in_transition_#{event_name}?" do
+              return @in_transition.to_sym == event_name.to_sym
             end
           end
         end
@@ -166,11 +178,11 @@ module Workflow
       else
         target_state = spec.states[event.transitions_to]
         check_transition(event)
-        set_validation_triggers(current_state, target_state, name)
+        set_transition_flags(current_state, target_state, name)
         # TODO: shift this down by one line?!
         # ... or possibly validate twice!
         run_on_transition(current_state, target_state, name, *args) # if valid?
-        if valid?
+        if event.meta[:skip_all_validations] or valid?
           transition(current_state, target_state, name, *args)
         else
           @halted_because = 'Validation for transition failed: %{errors}' % {:errors => self.errors.full_messages.join(', ')}
@@ -181,10 +193,10 @@ module Workflow
       end
     end
 
-    def set_validation_triggers(current_state, target_state, event_name)
-      self.instance_variable_set "@validate_on_#{current_state}_exit", true
-      self.instance_variable_set "@validate_on_#{target_state}_entry", true
-      self.instance_variable_set "@validate_on_#{event_name}", true
+    def set_transition_flags(current_state, target_state, event_name)
+      self.instance_variable_set '@in_exit', current_state
+      self.instance_variable_set '@in_entry', target_state
+      self.instance_variable_set '@in_transition', event_name
     end
 
     def halt(reason = nil)
