@@ -19,12 +19,12 @@ end
 begin
   require 'jeweler'
   Jeweler::Tasks.new do |gemspec|
-    gemspec.name = "workflow"
+    gemspec.name = 'workflow'
     gemspec.rubyforge_project = 'workflow'
-    gemspec.email = "vladimir@geekq.net"
-    gemspec.homepage = "http://www.geekq.net/workflow/"
-    gemspec.authors = ["Vladimir Dobriakov"]
-    gemspec.summary = "A replacement for acts_as_state_machine."
+    gemspec.email = 'vladimir@geekq.net'
+    gemspec.homepage = 'http://www.geekq.net/workflow/'
+    gemspec.authors = ['Vladimir Dobriakov', 'Willem van Kerkhof']
+    gemspec.summary = 'A replacement for acts_as_state_machine.'
     gemspec.description = <<-EOS
     Workflow is a finite-state-machine-inspired API for modeling and interacting
     with what we tend to refer to as 'workflow'.
