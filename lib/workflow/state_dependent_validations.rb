@@ -1,3 +1,5 @@
+require 'activemodel/validations'
+
 module Workflow
   module StateDependentValidations
     module StateDependency
@@ -49,15 +51,10 @@ module Workflow
   end
 end
 
-unless defined? ActiveModel::Validations
-  module ActiveModel::Validations
-    [AcceptanceValidator, ConfirmationValidator, ExclusionValidator,
-    FormatValidator, InclusionValidator, LengthValidator,
-    NumericalityValidator, PresenceValidator].each do |validator|
-      validator.send :include, Workflow::StateDependentValidations::StateDependency
-    end
+module ActiveModel::Validations
+  [AcceptanceValidator, ConfirmationValidator, ExclusionValidator,
+  FormatValidator, InclusionValidator, LengthValidator,
+  NumericalityValidator, PresenceValidator].each do |validator|
+    validator.send :include, Workflow::StateDependentValidations::StateDependency
   end
-else
-  raise 'state dependent validation only works with ActiveModel::Validations'
 end
-
