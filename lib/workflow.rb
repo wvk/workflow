@@ -95,7 +95,7 @@ module Workflow
   end
 
   module WorkflowClassMethods
-    attr_reader :workflow_spec, :in_entry, :in_exit, :in_transition
+    attr_reader :workflow_spec
 
     def workflow_column(column_name=nil)
       if column_name
@@ -146,6 +146,8 @@ module Workflow
   end
 
   module WorkflowInstanceMethods
+    attr_accessor :in_entry, :in_exit, :in_transition
+
     def current_state
       loaded_state = load_workflow_state
       res = spec.states[loaded_state.to_sym] if loaded_state
@@ -194,9 +196,9 @@ module Workflow
     end
 
     def set_transition_flags(current_state, target_state, event_name)
-      self.instance_variable_set '@in_exit', current_state
-      self.instance_variable_set '@in_entry', target_state
-      self.instance_variable_set '@in_transition', event_name
+      self.in_exit       = current_state.to_s
+      self.in_entry      = target_state.to_s
+      self.in_transition = event_name.to_s
     end
 
     def halt(reason = nil)
