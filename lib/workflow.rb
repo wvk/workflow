@@ -113,7 +113,15 @@ module Workflow
         state_name = state.name
         module_eval do
           define_method "#{state_name}?" do
-            state_name == current_state.name
+            state_name.to_sym == current_state.name.to_sym
+          end
+
+          define_method "in_#{state_name}_exit?" do
+            return self.in_exit.to_sym == state_name.to_sym
+          end
+
+          define_method "in_#{state_name}_entry?" do
+            return self.in_entry.to_sym == state_name.to_sym
           end
         end
 
@@ -124,20 +132,12 @@ module Workflow
               process_event!(event_name, *args)
             end
 
-            define_method "in_#{event_name}_exit?" do
-              return @in_exit.to_sym == state_name.to_sym
-            end
-
-            define_method "in_#{event_name}_entry?" do
-              return @in_entry.to_sym == state_name.to_sym
-            end
-
             define_method "can_#{event_name}?" do
               return self.current_state.events.include? event_name
             end
 
             define_method "in_transition_#{event_name}?" do
-              return @in_transition.to_sym == event_name.to_sym
+              return self.in_transition.to_sym == event_name.to_sym
             end
           end
         end
@@ -172,15 +172,15 @@ module Workflow
         raise NoTransitionAllowed.new \
             "There is no event #{name.to_sym} defined for the #{current_state} state"
       end
+      target_state = spec.states[event.transitions_to]
       @halted_because = nil
-      @halted = false
+      @halted         = false
+      set_transition_flags(current_state, target_state, name)
       return_value = run_action(event.action, *args) || run_action_callback(event.name, *args)
       if @halted
         return false
       else
-        target_state = spec.states[event.transitions_to]
         check_transition(event)
-        set_transition_flags(current_state, target_state, name)
         # TODO: shift this down by one line?!
         # ... or possibly validate twice!
         run_on_transition(current_state, target_state, name, *args) # if valid?
@@ -339,20 +339,18 @@ module Workflow
   def self.included(klass)
     klass.send :include, WorkflowInstanceMethods
     klass.extend WorkflowClassMethods
-    if Object.const_defined?(:ActiveRecord)
-      if klass < ActiveRecord::Base
-        klass.send :include, ActiveRecordInstanceMethods
-        klass.before_validation :write_initial_state
-      end
-    elsif Object.const_defined?(:Remodel)
-      if klass < Remodel::Entity
-        klass.send :include, RemodelInstanceMethods
-      end
-    elsif Object.const_defined?(:Mongoid)
-      if klass.include? Mongoid::Document
-        klass.send :include, MongoidInstanceMethods
-        klass.after_initialize :write_initial_state
-      end
+    if Object.const_defined?(:ActiveRecord) and klass < ActiveRecord::Base
+      klass.send :include, ActiveRecordInstanceMethods
+      klass.before_validation :write_initial_state
+    end
+
+    if Object.const_defined?(:Remodel) and klass < Remodel::Entity
+      klass.send :include, RemodelInstanceMethods
+    end
+
+    if Object.const_defined?(:Mongoid) and klass.include? Mongoid::Document
+      klass.send :include, MongoidInstanceMethods
+      klass.after_initialize :write_initial_state
     end
   end
 
