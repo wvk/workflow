@@ -132,6 +132,11 @@ module Workflow
               process_event!(event_name, *args)
             end
 
+            # this allows checks like can_approve? or can_reject_item?
+            # note we don't have a more generic can?(:approve) method.
+            # this is fully intentional, since this way it is far easier
+            # to overwrite the can_...? mehtods in a model than it would be
+            # with a generic can?(...) method.
             define_method "can_#{event_name}?" do
               return self.current_state.events.include? event_name
             end
@@ -168,10 +173,7 @@ module Workflow
 
     def process_event!(name, *args)
       event = current_state.events[name.to_sym]
-      if event.nil?
-        raise NoTransitionAllowed.new \
-            "There is no event #{name.to_sym} defined for the #{current_state} state"
-      end
+      prohibit_transition!(name) if event.nil?
       target_state = spec.states[event.transitions_to]
       @halted_because = nil
       @halted         = false
@@ -181,8 +183,6 @@ module Workflow
         return false
       else
         check_transition(event)
-        # TODO: shift this down by one line?!
-        # ... or possibly validate twice!
         run_on_transition(current_state, target_state, name, *args) # if valid?
         if event.meta[:skip_all_validations] or valid?
           transition(current_state, target_state, name, *args)
@@ -227,6 +227,19 @@ module Workflow
       c.workflow_spec
     end
 
+    protected
+
+    def assure_transition_allowed!(name)
+      unless self.send "can_#{name}?"
+        prohibit_transition! :approve_full_render_icon
+      end
+    end
+
+    def prohibit_transition!(name)
+      raise NoTransitionAllowed.new \
+          "There is no event #{name} defined for the #{current_state} state."
+    end
+
     private
 
     def check_transition(event)
@@ -234,8 +247,8 @@ module Workflow
       # "undefined method `on_entry' for nil:NilClass"
       # Reported by Kyle Burton
       if !spec.states[event.transitions_to]
-        raise WorkflowError.new("Event[#{event.name}]'s " +
-            "transitions_to[#{event.transitions_to}] is not a declared state.")
+        raise WorkflowError.new \
+            "Event[#{event.name}]'s transitions_to[#{event.transitions_to}] is not a declared state."
       end
     end
 
