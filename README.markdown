@@ -1,7 +1,7 @@
-What is workflow?
------------------
+What is validating-workflow?
+----------------------------
 
-Workflow is a finite-state-machine-inspired API for modeling and
+Validating-Workflow is a finite-state-machine-inspired API for modeling and
 interacting with what we tend to refer to as 'workflow'.
 
 A lot of business modeling tends to involve workflow-like concepts, and
@@ -19,6 +19,10 @@ transition to another state and potentially causes code to be executed
 from, and we can cause transitions to fail (guards), and we can hook in
 to every transition that occurs ever for whatever reason we can come up
 with.
+
+For convenience, validating-workflow adds certain validation options for
+ActiveModel so you may declaratively specify what to validate in which
+states or transitions when defining your validators.
 
 Now, all that's a mouthful, but we'll demonstrate the API bit by bit
 with a real-ish world example.

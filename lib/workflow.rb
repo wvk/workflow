@@ -1,4 +1,7 @@
 require 'rubygems'
+require 'workflow/active_model_persistence'
+require 'workflow/mongoid_persistence'
+require 'workflow/remodel_persistence'
 
 # See also README.markdown for documentation
 module Workflow
@@ -22,19 +25,25 @@ module Workflow
     def state(name, meta = {:meta => {}}, &events_and_etc)
       # meta[:meta] to keep the API consistent..., gah
       new_state = Workflow::State.new(name, meta[:meta])
-      @initial_state = new_state if @states.empty?
+      @initial_state       = new_state if @states.empty?
       @states[name.to_sym] = new_state
-      @scoped_state = new_state
+      @scoped_state        = new_state
       instance_eval(&events_and_etc) if events_and_etc
     end
 
     def event(name, args = {}, &action)
       target = args[:transitions_to] || args[:transition_to]
-      raise WorkflowDefinitionError.new(
-        "missing ':transitions_to' in workflow event definition for '#{name}'") \
-        if target.nil?
+      if target.nil?
+        raise WorkflowDefinitionError.new \
+          "missing ':transitions_to' in workflow event definition for '#{name}'"
+      end
       @scoped_state.events[name.to_sym] =
-        Workflow::Event.new(name, target, (args[:meta] or {}), &action)
+        Workflow::Event.new(name, target, (args[:meta] || {}), &action)
+    end
+
+    def allow(name, args={}, &action)
+      args[:transitions_to] ||= args[:transition_to] || @scoped_state.to_sym
+      event name, args, &action
     end
 
     def on_entry(&proc)
@@ -90,6 +99,10 @@ module Workflow
 
     def initialize(name, transitions_to, meta = {}, &action)
       @name, @transitions_to, @meta, @action = name, transitions_to.to_sym, meta, action
+    end
+
+    def perform_validation?
+      !self.meta[:skip_all_validations]
     end
 
   end
@@ -172,43 +185,47 @@ module Workflow
     end
 
     def process_event!(name, *args)
+      assure_transition_allowed! name
       event = current_state.events[name.to_sym]
-      prohibit_transition!(name) if event.nil?
-      target_state = spec.states[event.transitions_to]
+      assure_target_state_exists!(event)
+      set_transition_flags(current_state, spec.states[event.transitions_to], event)
       @halted_because = nil
       @halted         = false
-      set_transition_flags(current_state, target_state, name)
-      return_value = run_action(event.action, *args) || run_action_callback(event.name, *args)
+      return_value    = run_action(event.action, *args) || run_action_callback(event.name, *args)
       if @halted
-        return false
+#         run_on_failed_transition(*args)
+        return_value = false
       else
-        check_transition(event)
-        run_on_transition(current_state, target_state, name, *args) # if valid?
-        if event.meta[:skip_all_validations] or valid?
-          transition(current_state, target_state, name, *args)
+        if event.perform_validation? and not valid?
+          run_on_failed_transition(*args)
+#           @halted = true # make sure this one is not reset in the on_failed_transition callback
+          return_value = false
         else
-          @halted_because = 'Validation for transition failed: %{errors}' % {:errors => self.errors.full_messages.join(', ')}
-          @halted = true
-          return false
+          run_on_transition(*args)
+          transition(*args)
         end
-        return_value.nil? ? true : return_value
       end
+      return_value.nil? ? true : return_value
     end
 
-    def set_transition_flags(current_state, target_state, event_name)
-      self.in_exit       = current_state.to_s
-      self.in_entry      = target_state.to_s
-      self.in_transition = event_name.to_s
+    def set_transition_flags(current_state, target_state, event)
+      @in_exit       = current_state
+      @in_entry      = target_state
+      @in_transition = event
+    end
+
+    def clear_transition_flags
+      set_transition_flags nil, nil, nil
     end
 
     def halt(reason = nil)
+      clear_transition_flags
       @halted_because = reason
       @halted = true
     end
 
     def halt!(reason = nil)
-      @halted_because = reason
-      @halted = true
+      halt reason
       raise TransitionHalted.new(reason)
     end
 
@@ -231,7 +248,7 @@ module Workflow
 
     def assure_transition_allowed!(name)
       unless self.send "can_#{name}?"
-        prohibit_transition! :approve_full_render_icon
+        prohibit_transition! name
       end
     end
 
@@ -240,9 +257,7 @@ module Workflow
           "There is no event #{name} defined for the #{current_state} state."
     end
 
-    private
-
-    def check_transition(event)
+    def assure_target_state_exists!(event)
       # Create a meaningful error message instead of
       # "undefined method `on_entry' for nil:NilClass"
       # Reported by Kyle Burton
@@ -252,15 +267,26 @@ module Workflow
       end
     end
 
-    def transition(from, to, name, *args)
-      run_on_exit(from, to, name, *args)
-      val = persist_workflow_state to.to_s
-      run_on_entry(to, from, name, *args)
+    def transition(*args)
+      run_on_exit(*args)
+      run_on_transition(*args)
+      val = persist_workflow_state wf_target_state.name
+      run_on_entry(*args)
       val
     end
 
-    def run_on_transition(from, to, event, *args)
-      instance_exec(from.name, to.name, event, *args, &spec.on_transition_proc) if spec.on_transition_proc
+    def run_on_transition(*args)
+      instance_exec(self.wf_prior_state.name, self.wf_target_state.name, self.wf_event_name, *args, &spec.on_transition_proc) if spec.on_transition_proc
+    end
+
+    def run_on_failed_transition(*args)
+      if spec.respond_to? :on_failed_transition_proc
+        return_value = instance_exec(self.wf_prior_state.name, self.wf_target_state.name, self.wf_event_name, *args, &spec.on_failed_transition_proc)
+      else
+        return_value = halt(:validation_failed)
+      end
+      clear_transition_flags
+      return return_value
     end
 
     def run_action(action, *args)
@@ -271,24 +297,40 @@ module Workflow
       self.send action_name.to_sym, *args if self.respond_to?(action_name.to_sym)
     end
 
-    def run_on_entry(state, prior_state, triggering_event, *args)
-      if state.on_entry
-        instance_exec(prior_state.name, triggering_event, *args, &state.on_entry)
+    def run_on_entry(*args)
+      if self.wf_target_state.on_entry
+        instance_exec(self.wf_prior_state.name, self.wf_event_name, *args, &self.wf_target_state.on_entry)
       else
-        hook_name = "on_#{state}_entry"
-        self.send hook_name, prior_state, triggering_event, *args if self.respond_to? hook_name
+        hook_name = "on_#{self.wf_target_state.name}_entry"
+        self.send hook_name, self.wf_prior_state, self.wf_event_name, *args if self.respond_to? hook_name
       end
     end
 
-    def run_on_exit(state, new_state, triggering_event, *args)
-      if state
-        if state.on_exit
-          instance_exec(new_state.name, triggering_event, *args, &state.on_exit)
+    def run_on_exit(*args)
+      if self.wf_prior_state # no on_exit for entry into initial state
+        if self.wf_prior_state.on_exit
+          instance_exec(self.wf_target_state.name, self.wf_event_name, *args, &self.wf_prior_state.on_exit)
         else
-          hook_name = "on_#{state}_exit"
-          self.send hook_name, new_state, triggering_event, *args if self.respond_to? hook_name
+          hook_name = "on_#{self.wf_prior_state.name}_exit"
+          self.send hook_name, self.wf_target_state, self.wf_event_name, *args if self.respond_to? hook_name
         end
       end
+    end
+
+    def wf_prior_state
+      @in_exit
+    end
+
+    def wf_target_state
+      @in_entry
+    end
+
+    def wf_event_name
+      @in_transition.name
+    end
+
+    def wf_event
+      @in_transition
     end
 
     # load_workflow_state and persist_workflow_state
@@ -307,63 +349,14 @@ module Workflow
     end
   end
 
-  module ActiveRecordInstanceMethods
-    def load_workflow_state
-      read_attribute(self.class.workflow_column)
-    end
-
-    # On transition the new workflow state is immediately saved in the
-    # database.
-    def persist_workflow_state(new_value)
-      update_attribute self.class.workflow_column, new_value
-    end
-
-    private
-
-    # Motivation: even if NULL is stored in the workflow_state database column,
-    # the current_state is correctly recognized in the Ruby code. The problem
-    # arises when you want to SELECT records filtering by the value of initial
-    # state. That's why it is important to save the string with the name of the
-    # initial state in all the new records.
-    def write_initial_state
-      write_attribute self.class.workflow_column, current_state.to_s
-    end
-  end
-
-  module RemodelInstanceMethods
-    def load_workflow_state
-      send(self.class.workflow_column)
-    end
-
-    def persist_workflow_state(new_value)
-      update(self.class.workflow_column => new_value)
-    end
-  end
-
-  module MongoidInstanceMethods
-    include ActiveRecordInstanceMethods
-    # implementation of abstract method: saves new workflow state to DB
-    def persist_workflow_state(new_value)
-      self.write_attribute(self.class.workflow_column, new_value.to_s)
-      self.save! :validate => false
-    end
-  end
-
   def self.included(klass)
     klass.send :include, WorkflowInstanceMethods
     klass.extend WorkflowClassMethods
-    if Object.const_defined?(:ActiveRecord) and klass < ActiveRecord::Base
-      klass.send :include, ActiveRecordInstanceMethods
-      klass.before_validation :write_initial_state
-    end
 
-    if Object.const_defined?(:Remodel) and klass < Remodel::Entity
-      klass.send :include, RemodelInstanceMethods
-    end
-
-    if Object.const_defined?(:Mongoid) and klass.include? Mongoid::Document
-      klass.send :include, MongoidInstanceMethods
-      klass.after_initialize :write_initial_state
+    [ActiveModelPersistence, MongoidPersistence, RemodelPersistence].each do |konst|
+      if konst.happy_to_be_included_in? klass
+        klass.send :include, konst
+      end
     end
   end
 
@@ -397,34 +390,42 @@ module Workflow
     workflow_name = "#{klass.name.tableize}_workflow".gsub('/', '_')
     fname = File.join(target_dir, "generated_#{workflow_name}")
     File.open("#{fname}.dot", 'w') do |file|
-      file.puts %Q|
-digraph #{workflow_name} {
+      file.puts klass.new.workflow_diagram(graph_options)
+    end
+    `dot -Tpdf -o'#{fname}.pdf' '#{fname}.dot'`
+    puts "A PDF file was generated at '#{fname}.pdf'"
+  end
+
+  # Returns a representation of the state diagram for the
+  # calling model as a string in dot language.
+  # See Workflow.create_workflow_diagram for more deails
+  def workflow_diagram(graph_options)
+    str = <<-EOS
+digraph #{self.class} {
   graph [#{graph_options}];
   node [shape=box];
   edge [len=1];
-      |
+    EOS
 
-      klass.workflow_spec.states.each do |state_name, state|
-        file.puts %Q{  #{state.name} [label="#{state.name}"];}
-        state.events.each do |event_name, event|
-          meta_info = event.meta
-          if meta_info[:doc_weight]
-            weight_prop = ", weight=#{meta_info[:doc_weight]}"
-          else
-            weight_prop = ''
-          end
-          file.puts %Q{  #{state.name} -> #{event.transitions_to} [label="#{event_name.to_s.humanize}" #{weight_prop}];}
-        end
+    self.class.workflow_spec.states.each do |state_name, state|
+      state_meta = state.meta
+      if state == self.class.workflow_spec.initial_state
+        str << %Q{  #{state.name} [label="#{state.name}", shape=circle];\n}
+      else
+        str << %Q{  #{state.name} [label="#{state.name}", shape=#{state_meta[:terminal] ? 'doublecircle' : 'box, style=rounded'}];\n}
       end
-      file.puts "}"
-      file.puts
+      state.events.each do |event_name, event|
+        event_meta = event.meta
+        event_meta[:doc_weight] = 6 if event_meta[:main_path]
+        if event_meta[:doc_weight]
+          weight_prop = ", weight=#{event_meta[:doc_weight]}, penwidth=#{event_meta[:doc_weight] / 2 || 0.0}\n"
+        else
+          weight_prop = ''
+        end
+        str << %Q{  #{state.name} -> #{event.transitions_to} [label="#{event_name.to_s.humanize}" #{weight_prop}];\n}
+      end
     end
-    `dot -Tpdf -o'#{fname}.pdf' '#{fname}.dot'`
-    puts "
-Please run the following to open the generated file:
-
-open '#{fname}.pdf'
-
-"
+    str << "}\n"
+    return str
   end
 end
