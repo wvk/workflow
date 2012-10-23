@@ -2,7 +2,7 @@ module Workflow
   module ActiveModelPersistence
 
     def self.happy_to_be_included_in?(klass)
-      Object.const_defined?(:Mongoid) and klass.include? Mongoid::Document
+      Object.const_defined?(:ActiveRecord) and klass.is_a? ActiveRecord::Base
     end
 
     def self.included(klass)

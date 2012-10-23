@@ -8,7 +8,7 @@ module Workflow
 
   class Specification
 
-    attr_accessor :states, :initial_state, :meta, :on_transition_proc
+    attr_accessor :states, :initial_state, :meta, :on_transition_proc, :on_failed_transition_proc
 
     def initialize(meta = {}, &specification)
       @states = Hash.new
@@ -46,16 +46,20 @@ module Workflow
       event name, args, &action
     end
 
-    def on_entry(&proc)
-      @scoped_state.on_entry = proc
+    def on_entry(&proc_to_run)
+      @scoped_state.on_entry = proc_to_run
     end
 
-    def on_exit(&proc)
-      @scoped_state.on_exit = proc
+    def on_exit(&proc_to_run)
+      @scoped_state.on_exit = proc_to_run
     end
 
-    def on_transition(&proc)
-      @on_transition_proc = proc
+    def on_transition(&proc_to_run)
+      @on_transition_proc = proc_to_run
+    end
+
+    def on_failed_transition(&proc_to_run)
+      @on_failed_transition_proc = proc_to_run
     end
   end
 
@@ -193,15 +197,14 @@ module Workflow
       @halted         = false
       return_value    = run_action(event.action, *args) || run_action_callback(event.name, *args)
       if @halted
-#         run_on_failed_transition(*args)
+        run_on_failed_transition(*args)
         return_value = false
       else
         if event.perform_validation? and not valid?
           run_on_failed_transition(*args)
-#           @halted = true # make sure this one is not reset in the on_failed_transition callback
+          @halted = true # make sure this one is not reset in the on_failed_transition callback
           return_value = false
         else
-          run_on_transition(*args)
           transition(*args)
         end
       end
@@ -353,11 +356,13 @@ module Workflow
     klass.send :include, WorkflowInstanceMethods
     klass.extend WorkflowClassMethods
 
-    [ActiveModelPersistence, MongoidPersistence, RemodelPersistence].each do |konst|
-      if konst.happy_to_be_included_in? klass
-        klass.send :include, konst
-      end
-    end
+#     [ActiveModelPersistence, MongoidPersistence, RemodelPersistence].each do |konst|
+#       if konst.happy_to_be_included_in? klass
+#       raise "including #{konst}"
+#         raise "including #{konst}"
+#         klass.send :include, konst
+#       end
+#     end
   end
 
   # Generates a `dot` graph of the workflow.
