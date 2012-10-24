@@ -222,7 +222,6 @@ module Workflow
     end
 
     def halt(reason = nil)
-      clear_transition_flags
       @halted_because = reason
       @halted = true
     end
