@@ -1,10 +1,11 @@
 require 'rubygems'
-require 'workflow/active_model_persistence'
-require 'workflow/mongoid_persistence'
-require 'workflow/remodel_persistence'
 
 # See also README.markdown for documentation
 module Workflow
+  autoload :ActiveModelPersistence, 'workflow/active_model_persistence'
+  autoload :MongoidPersistence,     'workflow/mongoid_persistence'
+  autoload :RemodelPersistence,     'workflow/remodel_persistence'
+  autoload :Transactional,          'workflow/transactional'
 
   class Specification
 
