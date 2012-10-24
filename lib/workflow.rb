@@ -282,7 +282,7 @@ module Workflow
     end
 
     def run_on_failed_transition(*args)
-      if spec.respond_to? :on_failed_transition_proc
+      if spec.on_failed_transition_proc
         return_value = instance_exec(self.wf_prior_state.name, self.wf_target_state.name, self.wf_event_name, *args, &spec.on_failed_transition_proc)
       else
         return_value = halt(:validation_failed)
