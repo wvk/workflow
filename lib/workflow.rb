@@ -110,6 +110,14 @@ module Workflow
       !self.meta[:skip_all_validations]
     end
 
+    def to_sym
+      @name.to_sym
+    end
+
+    def to_s
+      @name.to_s
+    end
+
   end
 
   module WorkflowClassMethods
@@ -160,6 +168,7 @@ module Workflow
             end
 
             define_method "in_transition_#{event_name}?" do
+              return false unless self.in_transition
               return self.in_transition.to_sym == event_name.to_sym
             end
           end
