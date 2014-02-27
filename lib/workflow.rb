@@ -143,11 +143,11 @@ module Workflow
           end
 
           define_method "in_#{state_name}_exit?" do
-            return self.in_exit.to_sym == state_name.to_sym
+            self.in_exit and self.in_exit.to_sym == state_name.to_sym
           end
 
           define_method "in_#{state_name}_entry?" do
-            return self.in_entry.to_sym == state_name.to_sym
+            self.in_entry and self.in_entry.to_sym == state_name.to_sym
           end
         end
 
