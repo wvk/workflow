@@ -211,6 +211,7 @@ module Workflow
         return_value = false
       else
         if event.perform_validation? and not valid?
+          halt :validation_failed
           run_on_failed_transition(*args)
           @halted = true # make sure this one is not reset in the on_failed_transition callback
           return_value = false
@@ -295,7 +296,7 @@ module Workflow
       if spec.on_failed_transition_proc
         return_value = instance_exec(self.wf_prior_state.name, self.wf_target_state.name, self.wf_event_name, *args, &spec.on_failed_transition_proc)
       else
-        return_value = halt(:validation_failed)
+        return_value = nil
       end
       clear_transition_flags
       return return_value
