@@ -2,10 +2,11 @@ require 'rubygems'
 
 # See also README.markdown for documentation
 module Workflow
-  autoload :ActiveModelPersistence, 'workflow/active_model_persistence'
-  autoload :MongoidPersistence,     'workflow/mongoid_persistence'
-  autoload :RemodelPersistence,     'workflow/remodel_persistence'
-  autoload :Transactional,          'workflow/transactional'
+  autoload :ActiveModelPersistence,    'workflow/active_model_persistence'
+  autoload :MongoidPersistence,        'workflow/mongoid_persistence'
+  autoload :RemodelPersistence,        'workflow/remodel_persistence'
+  autoload :Transactional,             'workflow/transactional'
+  autoload :StateDependentValidations, 'workflow/state_dependent_validations'
 
   class Specification
 
@@ -19,6 +20,10 @@ module Workflow
 
     def state_names
       states.keys
+    end
+
+    def event_names
+      states.values.map{|e|  e.events.keys }.uniq
     end
 
     private
