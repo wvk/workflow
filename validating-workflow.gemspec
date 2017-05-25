@@ -1,5 +1,7 @@
 # encoding: utf-8
 
+require "date"
+
 Gem::Specification.new do |s|
   s.name = %q{validating-workflow}
   s.version = '0.7.9'
