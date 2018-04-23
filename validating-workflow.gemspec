@@ -4,7 +4,7 @@ require "date"
 
 Gem::Specification.new do |s|
   s.name = %q{validating-workflow}
-  s.version = '0.7.9'
+  s.version = '0.7.10'
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ['Vladimir Dobriakov', 'Willem van Kerkhof']
@@ -28,6 +28,7 @@ Gem::Specification.new do |s|
   s.rubygems_version = %q{2.5.2}
   s.summary = %q{A replacement for acts_as_state_machine, an enhancement of workflow.}
   s.test_files = %w(test/couchtiny_example.rb test/main_test.rb test/test_helper.rb test/without_active_record_test.rb test/multiple_workflows_test.rb test/readme_example.rb)
+  s.license = 'MIT'
 
   if s.respond_to? :specification_version then
     current_version = Gem::Specification::CURRENT_SPECIFICATION_VERSION

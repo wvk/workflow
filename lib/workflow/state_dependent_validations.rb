@@ -5,16 +5,16 @@ module Workflow
     module StateDependency
 
       def self.included(base)
-        base.send :alias_method_chain, :validate, :state_dependency
-      end
-
-      def validate_with_state_dependency(record)
-        if not record.respond_to?(:current_state) or
-            perform_validation_for_state?(record.current_state) or
-            perform_validation_for_transition?(record.in_transition) or
-            perform_validation_for_transition?("#{record.in_exit}_exit") or
-            perform_validation_for_transition?("#{record.in_entry}_entry")
-          validate_without_state_dependency(record)
+        base.prepend Module.new do
+          def validate(record)
+            if not record.respond_to?(:current_state) or
+                perform_validation_for_state?(record.current_state) or
+                perform_validation_for_transition?(record.in_transition) or
+                perform_validation_for_transition?("#{record.in_exit}_exit") or
+                perform_validation_for_transition?("#{record.in_entry}_entry")
+              super(record)
+            end
+          end
         end
       end
 
