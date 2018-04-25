@@ -21,7 +21,7 @@ Gem::Specification.new do |s|
 }
   s.email = %q{vladimir@geekq.net, wvk@consolving.de}
   s.extra_rdoc_files = %w(README.markdown)
-  s.files = [".gitignore", "MIT-LICENSE", "README.markdown", "Rakefile", "VERSION", "lib/workflow.rb", "test/couchtiny_example.rb", "test/main_test.rb", "test/multiple_workflows_test.rb", "test/readme_example.rb", "test/test_helper.rb", "test/without_active_record_test.rb", "workflow.rb", "validating-workflow.rb", "lib/workflow/state_dependent_validations.rb", "lib/workflow/active_model_persistence.rb", "lib/workflow/mongoid_persistence.rb", "lib/workflow/remodel_persistence.rb", "lib/workflow/transactional.rb"]
+  s.files = [".gitignore", "MIT-LICENSE", "README.markdown", "Rakefile", "VERSION", "lib/workflow.rb", "test/couchtiny_example.rb", "test/main_test.rb", "test/multiple_workflows_test.rb", "test/readme_example.rb", "test/test_helper.rb", "test/without_active_record_test.rb", "workflow.rb", "lib/validating-workflow.rb", "lib/workflow/state_dependent_validations.rb", "lib/workflow/active_model_persistence.rb", "lib/workflow/mongoid_persistence.rb", "lib/workflow/remodel_persistence.rb", "lib/workflow/transactional.rb"]
   s.homepage = %q{http://www.geekq.net/workflow/}
   s.rdoc_options = %w(--charset=UTF-8)
   s.require_paths = %w(lib)
