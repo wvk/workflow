@@ -290,6 +290,7 @@ module Workflow
       run_on_transition(*args)
       val = persist_workflow_state wf_target_state.name
       run_on_entry(*args)
+      clear_transition_flags
       val
     end
 
